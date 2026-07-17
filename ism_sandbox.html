@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>解释结构模型 ISM 沙盘</title>
+<style>
+  :root{
+    --bg:#f5f7fb; --card:#ffffff; --ink:#1f2a44; --muted:#6b7891;
+    --line:#e3e8f2; --brand:#2f6df0; --brand2:#7c4dff; --accent:#ff8a3d;
+    --ok:#16a34a; --warn:#e11d48; --soft:#eef3ff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.55;
+  }
+  header{
+    background:linear-gradient(120deg,var(--brand),var(--brand2));
+    color:#fff; padding:20px 26px; box-shadow:0 4px 16px rgba(47,109,240,.25);
+  }
+  header h1{margin:0; font-size:22px; letter-spacing:.5px;}
+  header p{margin:6px 0 0; opacity:.92; font-size:13.5px;}
+  .wrap{max-width:1180px; margin:0 auto; padding:22px 20px 60px;}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:18px 20px; margin-bottom:20px; box-shadow:0 2px 10px rgba(31,42,68,.04);
+  }
+  .card h2{margin:0 0 12px; font-size:16px; display:flex; align-items:center; gap:8px;}
+  .card h2 .tag{font-size:11px; background:var(--soft); color:var(--brand);
+    padding:2px 9px; border-radius:20px; font-weight:600;}
+  .controls{display:flex; flex-wrap:wrap; gap:12px; align-items:center;}
+  label.fld{font-size:13px; color:var(--muted); display:flex; align-items:center; gap:7px;}
+  input[type=number]{width:70px; padding:7px 9px; border:1px solid var(--line);
+    border-radius:8px; font-size:14px;}
+  button{
+    border:none; border-radius:9px; padding:9px 16px; font-size:13.5px; cursor:pointer;
+    font-weight:600; transition:.15s; color:#fff; background:var(--brand);
+  }
+  button:hover{filter:brightness(1.06);}
+  button.ghost{background:#fff; color:var(--brand); border:1px solid var(--brand);}
+  button.alt{background:var(--accent);}
+  button.sub{background:var(--brand2);}
+  .labels{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+  .labels .lab{display:flex; align-items:center; gap:5px; font-size:12px; color:var(--muted);}
+  .labels input{width:62px; padding:5px 7px; border:1px solid var(--line); border-radius:7px; font-size:13px;}
+  .matrix-scroll{overflow:auto;}
+  table.mat{border-collapse:collapse; font-size:13px; margin:4px auto;}
+  table.mat th, table.mat td{border:1px solid var(--line); text-align:center;
+    padding:0; width:34px; height:34px;}
+  table.mat th{background:var(--soft); color:var(--brand); font-weight:600;}
+  table.mat td.ctl{cursor:pointer; user-select:none; transition:.1s; font-weight:700;}
+  table.mat td.ctl:hover{background:#dbe6ff;}
+  table.mat td.on{background:var(--brand); color:#fff;}
+  table.mat td.diag{background:#f0f2f7; color:#b9c2d6; cursor:default;}
+  table.mat td.ro{background:#fff; color:var(--ink); font-weight:600;}
+  table.mat td.ro.on{background:var(--brand2); color:#fff;}
+  .legend{font-size:12.5px; color:var(--muted); margin-top:10px;}
+  .legend b{color:var(--ink);}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media(max-width:880px){.grid2{grid-template-columns:1fr;}}
+  .levels{font-size:13.5px;}
+  .levels .lv{background:var(--soft); border-radius:9px; padding:8px 12px; margin:6px 0;
+    display:flex; gap:10px; align-items:center;}
+  .levels .lv .n{font-weight:700; color:var(--brand); min-width:54px;}
+  .lv.scc{background:#fff3e8;}
+  .graph-box{overflow:auto; background:#fbfcff; border:1px dashed var(--line); border-radius:10px; padding:8px;}
+  svg text{font-family:"Microsoft YaHei",sans-serif;}
+  .edge{stroke:#8694b0; stroke-width:1.8; fill:none;}
+  .node-circle{fill:#fff; stroke:var(--brand); stroke-width:2.2;}
+  .node-circle.scc{stroke:var(--accent);}
+  .node-text{fill:var(--ink); font-size:13px; font-weight:700; text-anchor:middle; dominant-baseline:central;}
+  details{margin-top:6px;}
+  summary{cursor:pointer; font-size:13.5px; color:var(--brand); font-weight:600;}
+  details ol{font-size:13px; color:var(--muted); padding-left:20px;}
+  details ol li{margin:5px 0;}
+  .hint{font-size:12px; color:var(--muted); margin-top:6px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🐋 解释结构模型（ISM）互动沙盘</h1>
+  <p>系统工程 · 选择节点数 → 设置邻接矩阵 → 自动生成可达矩阵 · 骨架矩阵 · 递阶结构有向图</p>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2><span class="tag">步骤 1</span> 设置系统要素</h2>
+    <div class="controls">
+      <label class="fld">节点数量 n
+        <input type="number" id="nodeCount" min="3" max="12" value="7">
+      </label>
+      <button class="ghost" id="genBtn">生成矩阵</button>
+      <button class="sub" id="presetA">示例 A（7要素·递阶）</button>
+      <button class="sub" id="presetB">示例 B（含强连通回路）</button>
+      <button class="alt" id="clearBtn">清空</button>
+    </div>
+    <div class="labels" id="labelsBox"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="tag">步骤 2</span> 邻接矩阵 A（点击单元格切换 0 / 1）</h2>
+    <div class="matrix-scroll"><div id="adjBox" style="display:flex;justify-content:center;"></div></div>
+    <div class="legend">
+      <b>a<sub>ij</sub>=1</b> 表示要素 <b>i 直接影响 / 导致 j</b>（即 i → j）。
+      对角线自动叠加单位矩阵 I。点击格子即可设置关系。
+    </div>
+    <div style="margin-top:12px;"><button id="calcBtn">▶ 计算可达矩阵 / 骨架矩阵 / 递阶图</button></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2><span class="tag">结果</span> 可达矩阵 R</h2>
+      <div class="matrix-scroll"><div id="reachBox" style="display:flex;justify-content:center;"></div></div>
+      <div class="hint">R = (A+I) 的布尔传递闭包，R<sub>ij</sub>=1 表示 i 可达 j（直接或间接）。</div>
+    </div>
+    <div class="card">
+      <h2><span class="tag">结果</span> 骨架矩阵（缩并后）</h2>
+      <div class="matrix-scroll"><div id="skelBox" style="display:flex;justify-content:center;"></div></div>
+      <div class="hint">去除传递性冗余边后的最小关系；相同底色格子为同一个强连通分量（回路），已缩并为超节点。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="tag">结果</span> 层级划分</h2>
+    <div class="levels" id="levelsBox"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="tag">结果</span> 递阶结构有向图</h2>
+    <div class="graph-box"><div id="graphBox"></div></div>
+    <div class="legend">
+      第 1 级（顶层）置于最上方，层级越往下越偏“根因”。
+      <b>箭头方向</b> = 直接影响方向（由低层级指向高层级，即“原因 → 结果”）。
+      橙色节点 / 橙色回路表示强连通分量（要素间相互可达）。
+    </div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>ISM 方法原理速览（点开）</summary>
+      <ol>
+        <li><b>邻接矩阵 A</b>：a<sub>ij</sub>=1 表示 i 直接影响 j，反映要素间的直接二元关系。</li>
+        <li><b>可达矩阵 R</b>：R=(A+I)<sup>∞</sup>（布尔传递闭包），刻画任意两要素间的直接或间接可达性。</li>
+        <li><b>层级划分</b>：对每个要素求可达集 R(i) 与先行集 A(i)。满足 R(i)=R(i)∩A(i) 者为最高层；逐层剔除即得递阶层级。存在回路时先用 Tarjan 算法缩并为强连通超节点。</li>
+        <li><b>骨架矩阵</b>：在缩并系统的可达矩阵中删除传递性冗余边，得到能完整表达层级结构的最小关系集合。</li>
+        <li><b>递阶结构有向图</b>：按层级自上而下布置节点，按骨架矩阵绘制有向边，直观呈现系统结构。</li>
+      </ol>
+    </details>
+  </div>
+
+</div>
+
+<script>
+let n = 7;
+let labels = [];
+let A = [];
+
+const nodeCount = document.getElementById('nodeCount');
+const labelsBox = document.getElementById('labelsBox');
+const adjBox = document.getElementById('adjBox');
+const reachBox = document.getElementById('reachBox');
+const skelBox = document.getElementById('skelBox');
+const levelsBox = document.getElementById('levelsBox');
+const graphBox = document.getElementById('graphBox');
+
+function init(){
+  n = Math.max(3, Math.min(12, parseInt(nodeCount.value)||7));
+  nodeCount.value = n;
+  labels = Array.from({length:n}, (_,i)=>'S'+(i+1));
+  A = Array.from({length:n}, ()=>new Array(n).fill(0));
+  renderLabels();
+  renderAdj();
+}
+
+function renderLabels(){
+  labelsBox.innerHTML = '';
+  labels.forEach((lab,i)=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'lab';
+    const span = document.createElement('span'); span.textContent = (i+1)+':';
+    const inp = document.createElement('input'); inp.value = lab;
+    inp.addEventListener('input', e=>{
+      labels[i] = e.target.value || ('S'+(i+1));
+      renderAdj(); refreshHeaders();
+    });
+    wrap.appendChild(span); wrap.appendChild(inp);
+    labelsBox.appendChild(wrap);
+  });
+}
+
+function mkTable(headers, bodyFn, opts){
+  // opts: {editable, roMatrix, diagDisabled}
+  const t = document.createElement('table');
+  t.className = 'mat';
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  const corner = document.createElement('th'); corner.textContent = opts.corner||'';
+  htr.appendChild(corner);
+  headers.forEach(h=>{ const th=document.createElement('th'); th.textContent=h; htr.appendChild(th); });
+  thead.appendChild(htr); t.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  for(let i=0;i<n;i++){
+    const tr = document.createElement('tr');
+    const rh = document.createElement('th'); rh.textContent = headers[i]; tr.appendChild(rh);
+    for(let j=0;j<n;j++){
+      tr.appendChild(bodyFn(i,j));
+    }
+    tbody.appendChild(tr);
+  }
+  t.appendChild(tbody);
+  return t;
+}
+
+function renderAdj(){
+  adjBox.innerHTML = '';
+  const t = mkTable(labels, (i,j)=>{
+    const td = document.createElement('td');
+    if(i===j){ td.className='diag'; td.textContent='–'; return td; }
+    td.className = 'ctl' + (A[i][j]?' on':'');
+    td.textContent = A[i][j];
+    td.addEventListener('click', ()=>{
+      A[i][j] = A[i][j]?0:1;
+      td.className = 'ctl' + (A[i][j]?' on':'');
+      td.textContent = A[i][j];
+    });
+    return td;
+  }, {corner:'i \\ j'});
+  adjBox.appendChild(t);
+}
+
+function refreshHeaders(){ /* labels already re-rendered via renderAdj on input */ }
+
+// ---------- matrix helpers ----------
+function boolMult(X,Y){
+  const m=X.length; const Z=Array.from({length:m},()=>new Array(m).fill(0));
+  for(let i=0;i<m;i++) for(let j=0;j<m;j++){
+    let s=0; for(let k=0;k<m;k++) s |= X[i][k] & Y[k][j];
+    Z[i][j]=s;
+  }
+  return Z;
+}
+function eqMat(X,Y){
+  for(let i=0;i<X.length;i++) for(let j=0;j<X.length;j++) if(X[i][j]!==Y[i][j]) return false;
+  return true;
+}
+function reachability(adj){
+  const m=adj.length;
+  let M = adj.map((r,i)=>r.map((v,j)=> (i===j?1:v)));
+  let R = M.map(r=>r.slice());
+  for(let it=0; it<m; it++){
+    const R2 = boolMult(R,R);
+    if(eqMat(R,R2)) break;
+    R = R2;
+  }
+  return R;
+}
+function tarjan(adj){
+  const N=adj.length; let index=0;
+  const stack=[]; const onStack=new Array(N).fill(false);
+  const idx=new Array(N).fill(-1); const low=new Array(N).fill(0);
+  const sccs=[];
+  function sc(v){
+    idx[v]=index; low[v]=index; index++;
+    stack.push(v); onStack[v]=true;
+    for(let w=0;w<N;w++) if(adj[v][w]===1){
+      if(idx[w]===-1){ sc(w); low[v]=Math.min(low[v],low[w]); }
+      else if(onStack[w]){ low[v]=Math.min(low[v],idx[w]); }
+    }
+    if(low[v]===idx[v]){
+      const comp=[]; let w;
+      do { w=stack.pop(); onStack[w]=false; comp.push(w);}while(w!==v);
+      sccs.push(comp);
+    }
+  }
+  for(let v=0;v<N;v++) if(idx[v]===-1) sc(v);
+  return sccs;
+}
+function levelPartition(reachSCC, anteSCC, m){
+  let remaining = Array.from({length:m},(_,i)=>i);
+  const levels=[];
+  while(remaining.length>0){
+    const top=[];
+    for(const s of remaining){
+      const Rs = remaining.filter(t=> reachSCC[s][t]===1);
+      const As = remaining.filter(t=> anteSCC[s][t]===1);
+      const inter = Rs.filter(t=> As.includes(t));
+      if(Rs.length===inter.length) top.push(s);
+    }
+    if(top.length===0) top.push(remaining[0]); // safety
+    levels.push(top);
+    remaining = remaining.filter(s=> !top.includes(s));
+  }
+  return levels;
+}
+
+// ---------- main compute ----------
+function compute(){
+  const R = reachability(A);
+  const sccs = tarjan(A);
+  const m = sccs.length;
+  const nodeToSuper = new Array(n).fill(0);
+  sccs.forEach((scc,idx)=> scc.forEach(nd=> nodeToSuper[nd]=idx));
+
+  const reachSCC = Array.from({length:m},()=>new Array(m).fill(0));
+  const anteSCC  = Array.from({length:m},()=>new Array(m).fill(0));
+  for(let s=0;s<m;s++) for(let t=0;t<m;t++){
+    let r=0,a=0;
+    for(const i of sccs[s]) for(const j of sccs[t]){
+      if(R[i][j]===1) r=1;
+      if(R[j][i]===1) a=1;
+    }
+    reachSCC[s][t]=r; anteSCC[s][t]=a;
+  }
+
+  const levels = levelPartition(reachSCC, anteSCC, m); // levels[0] = top
+  const superLevel = new Array(m).fill(-1);
+  levels.forEach((comp,li)=> comp.forEach(s=> superLevel[s]=li));
+  const L = levels.length;
+  const levelsByNode = Array.from({length:L},()=>[]);
+  for(let nd=0; nd<n; nd++) levelsByNode[superLevel[nodeToSuper[nd]]].push(nd);
+
+  // skeleton (condensed)
+  const S = reachSCC.map(r=>r.slice());
+  for(let s=0;s<m;s++) for(let t=0;t<m;t++){
+    if(s!==t && S[s][t]===1){
+      let trans=false;
+      for(let k=0;k<m;k++){
+        if(k!==s && k!==t && S[s][k]===1 && S[k][t]===1){ trans=true; break; }
+      }
+      if(trans) S[s][t]=0;
+    }
+  }
+
+  renderReach(R);
+  renderSkel(S, sccs);
+  renderLevels(levelsByNode, nodeToSuper, sccs);
+  drawGraph(levelsByNode, S, sccs, nodeToSuper, superLevel);
+}
+
+function renderReach(R){
+  reachBox.innerHTML='';
+  const t = mkTable(labels, (i,j)=>{
+    const td=document.createElement('td');
+    td.className='ro'+(R[i][j]?' on':'');
+    td.textContent=R[i][j];
+    return td;
+  }, {corner:'i \\ j'});
+  reachBox.appendChild(t);
+}
+
+function superLabel(scc){
+  return scc.map(nd=>labels[nd]).join(',');
+}
+function renderSkel(S, sccs){
+  skelBox.innerHTML='';
+  const heads = sccs.map((scc,idx)=> superLabel(scc));
+  const m = sccs.length;
+  const t = document.createElement('table'); t.className='mat';
+  const thead=document.createElement('thead'); const htr=document.createElement('tr');
+  const c=document.createElement('th'); c.textContent='i \\ j'; htr.appendChild(c);
+  heads.forEach(h=>{const th=document.createElement('th'); th.textContent=h; htr.appendChild(th);});
+  thead.appendChild(htr); t.appendChild(thead);
+  const tb=document.createElement('tbody');
+  for(let i=0;i<m;i++){
+    const tr=document.createElement('tr');
+    const rh=document.createElement('th'); rh.textContent=heads[i]; tr.appendChild(rh);
+    for(let j=0;j<m;j++){
+      const td=document.createElement('td');
+      const isScc = (i===j);
+      td.className='ro'+(S[i][j]?' on':'')+(isScc?'':'');
+      if(i===j) td.style.background='#fff3e8';
+      td.textContent=S[i][j];
+      tr.appendChild(td);
+    }
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); skelBox.appendChild(t);
+}
+
+function renderLevels(levelsByNode, nodeToSuper, sccs){
+  levelsBox.innerHTML='';
+  levelsByNode.forEach((arr,li)=>{
+    const div=document.createElement('div');
+    const isScc = arr.some(nd=> sccs[nodeToSuper[nd]].length>1);
+    div.className='lv'+(isScc?' scc':'');
+    const n=document.createElement('span'); n.className='n'; n.textContent='第 '+(li+1)+' 级';
+    const v=document.createElement('span');
+    v.textContent = arr.map(nd=> labels[nd] + (sccs[nodeToSuper[nd]].length>1?'（回路）':'')).join('  ·  ');
+    div.appendChild(n); div.appendChild(v);
+    levelsBox.appendChild(div);
+  });
+}
+
+// ---------- graph ----------
+const nodeR=26, levelGap=130, nodeGapX=115, marginX=80, marginY=64;
+function drawGraph(levelsByNode, S, sccs, nodeToSuper, superLevel){
+  const L = levelsByNode.length;
+  const maxCount = Math.max(1, ...levelsByNode.map(a=>a.length));
+  const width = Math.max(640, maxCount*nodeGapX + marginX*2);
+  const height = L*levelGap + marginY*2;
+  const cx = width/2;
+  const pos={};
+  for(let li=0; li<L; li++){
+    const arr=levelsByNode[li]; const cnt=arr.length;
+    const totalW=(cnt-1)*nodeGapX; const startX=cx-totalW/2;
+    const y=marginY+li*levelGap;
+    arr.forEach((nd,k)=>{ pos[nd]={x:startX+k*nodeGapX, y}; });
+  }
+  const m=sccs.length;
+  const repOf=(sccIdx, targetNd)=>{
+    const scc=sccs[sccIdx];
+    if(scc.length===1) return scc[0];
+    let best=scc[0], bd=Infinity;
+    for(const nd of scc){
+      const d=Math.hypot(pos[nd].x-pos[targetNd].x, pos[nd].y-pos[targetNd].y);
+      if(d<bd){bd=d;best=nd;}
+    }
+    return best;
+  };
+
+  let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+  svg += `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8694b0"/></marker></defs>`;
+
+  // within-SCC cycles
+  for(let s=0;s<m;s++){
+    const scc=sccs[s];
+    if(scc.length<2) continue;
+    const order = scc.slice().sort((a,b)=>pos[a].x-pos[b].x);
+    for(let k=0;k<order.length;k++){
+      const a=order[k], b=order[(k+1)%order.length];
+      svg += curveArrow(pos[a], pos[b], 26);
+    }
+  }
+  // skeleton edges between super-nodes
+  for(let s=0;s<m;s++) for(let t=0;t<m;t++){
+    if(s!==t && S[s][t]===1){
+      // pick reps nearest each other
+      const candT = sccs[t];
+      let tRep = candT[0], bd=Infinity;
+      for(const nd of sccs[s]){
+        for(const tm of candT){
+          const d=Math.hypot(pos[nd].x-pos[tm].x, pos[nd].y-pos[tm].y);
+          if(d<bd){bd=d; tRep=tm;}
+        }
+      }
+      const sRep = repOf(s, tRep);
+      svg += arrow(pos[sRep], pos[tRep]);
+    }
+  }
+  // nodes
+  for(let nd=0; nd<n; nd++){
+    const p=pos[nd]; const scc=sccs[nodeToSuper[nd]];
+    const cls = scc.length>1 ? 'node-circle scc' : 'node-circle';
+    svg += `<circle cx="${p.x}" cy="${p.y}" r="${nodeR}" class="${cls}"/>`;
+    svg += `<text x="${p.x}" y="${p.y}" class="node-text">${labels[nd]}</text>`;
+  }
+  svg += `</svg>`;
+  graphBox.innerHTML = svg;
+}
+
+function arrow(p1,p2){
+  const dx=p2.x-p1.x, dy=p2.y-p1.y; const len=Math.hypot(dx,dy)||1;
+  const ux=dx/len, uy=dy/len;
+  const sx=p1.x+ux*nodeR, sy=p1.y+uy*nodeR;
+  const ex=p2.x-ux*(nodeR+5), ey=p2.y-uy*(nodeR+5);
+  return `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" class="edge" marker-end="url(#arrow)"/>`;
+}
+function curveArrow(p1,p2,bend){
+  const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+  const dx=p2.x-p1.x, dy=p2.y-p1.y; const len=Math.hypot(dx,dy)||1;
+  const nx=-dy/len, ny=dx/len;
+  const cx=mx+nx*bend, cy=my+ny*bend;
+  const ux=p1.x-cx, uy=p1.y-cy; const l1=Math.hypot(ux,uy)||1;
+  const sx=cx+ux/l1*nodeR, sy=cy+uy/l1*nodeR;
+  const vx=p2.x-cx, vy=p2.y-cy; const l2=Math.hypot(vx,vy)||1;
+  const ex=cx+vx/l2*(nodeR+5), ey=cy+vy/l2*(nodeR+5);
+  return `<path d="M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}" class="edge" marker-end="url(#arrow)"/>`;
+}
+
+// ---------- presets ----------
+function loadPreset(which){
+  if(which==='A'){
+    n=7; nodeCount.value=7;
+    init();
+    const edges=[[0,2],[0,3],[1,3],[2,4],[3,4],[3,5],[4,6],[5,6]];
+    edges.forEach(([i,j])=> A[i][j]=1);
+  } else {
+    n=5; nodeCount.value=5;
+    init();
+    const edges=[[0,1],[1,2],[2,1],[2,3],[3,4]];
+    edges.forEach(([i,j])=> A[i][j]=1);
+  }
+  renderAdj(); compute();
+}
+
+// ---------- events ----------
+document.getElementById('genBtn').addEventListener('click', init);
+document.getElementById('clearBtn').addEventListener('click', ()=>{ A=Array.from({length:n},()=>new Array(n).fill(0)); renderAdj(); });
+document.getElementById('calcBtn').addEventListener('click', compute);
+document.getElementById('presetA').addEventListener('click', ()=>loadPreset('A'));
+document.getElementById('presetB').addEventListener('click', ()=>loadPreset('B'));
+
+init();
+</script>
+</body>
+</html>
